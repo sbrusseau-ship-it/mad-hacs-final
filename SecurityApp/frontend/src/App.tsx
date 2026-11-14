@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 
 type ScanField = "email" | "username" | "password";
 
@@ -56,24 +56,39 @@ export default function App() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [showResult, setShowResult] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
 
   const toggleField = (field: ScanField) => {
     setEnabled((current) => ({ ...current, [field]: !current[field] }));
-    setShowResult(false);
+    setScanMessage("");
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsScanning(true);
-    setShowResult(false);
+    if (!isReady || isScanning) return;
 
-    // BACKEND INTEGRATION POINT:
-    // Replace this timer with a request to your secure breach-checking API.
-    window.setTimeout(() => {
+    setScanMessage("");
+    setIsScanning(true);
+    try {
+      const response = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fields: activeFields.filter(({ id }) => values[id].trim()).map(({ id }) => id),
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+      if (typeof data?.message !== "string" || !data.message.trim()) {
+        throw new Error("Invalid demo response");
+      }
+      setScanMessage(data.message);
+    } catch {
+      setScanMessage("The demo request failed. Check that Flask is running and try again.");
+    } finally {
       setIsScanning(false);
-      setShowResult(true);
-    }, 1100);
+    }
   };
 
   const activeFields = scanFields.filter(({ id }) => enabled[id]);
@@ -174,6 +189,7 @@ export default function App() {
                       <button
                         key={field.id}
                         type="button"
+                        disabled={isScanning}
                         onClick={() => toggleField(field.id)}
                         className={`rounded border px-3 py-2 font-mono text-xs tracking-[0.06em] transition ${
                           enabled[field.id]
@@ -207,12 +223,13 @@ export default function App() {
                         <input
                           type={field.id === "password" && showPassword ? "text" : field.type}
                           value={values[field.id]}
+                          disabled={isScanning}
                           onChange={(event) => {
                             setValues((current) => ({
                               ...current,
                               [field.id]: event.target.value,
                             }));
-                            setShowResult(false);
+                            setScanMessage("");
                           }}
                           placeholder={field.placeholder}
                           autoComplete={field.id === "password" ? "new-password" : field.id}
@@ -249,7 +266,7 @@ export default function App() {
                   {isScanning ? (
                     <>
                       <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/25 border-t-black" />
-                      SEARCHING INDEX
+                      SENDING DEMO REQUEST
                     </>
                   ) : (
                     <>
@@ -258,14 +275,10 @@ export default function App() {
                   )}
                 </button>
 
-                {showResult && (
+                {scanMessage && (
                   <div className="mt-5 border-l-2 border-[#4da3ff] bg-[#4da3ff]/[0.06] px-4 py-3">
-                    <p className="font-mono text-xs text-[#4da3ff]">
-                      QUERY READY // API NOT CONNECTED
-                    </p>
-                    <p className="mt-1.5 text-sm leading-6 text-white/65">
-                      Input validation succeeded. Connect your breach intelligence endpoint in{" "}
-                      <code className="text-white/65">handleSubmit()</code> to return live results.
+                    <p role="status" className="text-sm leading-6 text-white/65">
+                      {scanMessage}
                     </p>
                   </div>
                 )}
