@@ -145,7 +145,20 @@ CATEGORY_MAP = {
 }
 
 
+def is_project_reference(url: str) -> bool:
+    """Repository/docs pages describe a tool; visiting them does not run it."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host in {"raw.githubusercontent.com", "gist.github.com"} or host.endswith(".github.io"):
+        return True
+    if host in {"github.com", "www.github.com"}:
+        parts = [part for part in parsed.path.split("/") if part]
+        return len(parts) >= 2 and parts[0] not in {"search", "topics", "collections", "marketplace"}
+    return False
+
+
 def get_relevant_tools(all_tools: list, input_type: InputType) -> list:
+    all_tools = [tool for tool in all_tools if not is_project_reference(tool.url)]
     categories = CATEGORY_MAP.get(input_type, [])
     if not categories:
         log.warning(f"Unknown input type — searching ALL {len(all_tools)} tools")
@@ -256,6 +269,7 @@ class ToolResult:
     error: Optional[str] = None
     source_url: Optional[str] = None
     final_url: Optional[str] = None
+    backend: str = "browser"
 
 
 async def analyze_page(page: Page, tool: Tool, query: str, input_type: InputType) -> ToolResult:
@@ -332,20 +346,42 @@ async def search_one_query(
     relevant_tools: list,
     browser,
     semaphore: asyncio.Semaphore,
-    delay: float
+    delay: float,
+    on_result=None,
+    source_timeout: float = 30.0,
 ) -> List[ToolResult]:
     """Search one query across all its relevant tools, with concurrency limiting."""
     results = []
 
     async def search_tool(tool: Tool) -> ToolResult:
         async with semaphore:
-            page = await browser.new_page()
+            page = None
             try:
-                result = await analyze_page(page, tool, query, input_type)
-                return result
+                async def inspect():
+                    nonlocal page
+                    page = await browser.new_page()
+                    return await analyze_page(page, tool, query, input_type)
+
+                result = await asyncio.wait_for(inspect(), timeout=source_timeout)
+            except Exception as exc:
+                result = ToolResult(
+                    input_value=query, input_type=input_type.value,
+                    tool_name=tool.name, category=tool.parent_category,
+                    url_searched=build_search_url(tool, query), status="error",
+                    error="Source timed out." if isinstance(exc, asyncio.TimeoutError) else "Source could not be inspected.",
+                    source_url=tool.url,
+                )
             finally:
-                await page.close()
+                if page is not None:
+                    try:
+                        await asyncio.wait_for(page.close(), timeout=5)
+                    except Exception:
+                        pass
+            if on_result:
+                on_result(result)
+            if delay:
                 await asyncio.sleep(delay)
+            return result
 
     log.info(f"\n{'='*60}")
     log.info(f"QUERY: '{query}' (type: {input_type.value}) → {len(relevant_tools)} tools")
@@ -424,14 +460,28 @@ async def run_parallel_osint_search(
     queries: List[Tuple[str, InputType]],
     all_tools: list,
     headless: bool = True,
-    max_concurrent: int = 3,
+    max_concurrent: int = 8,
     delay_between: float = 1.0,
-    max_tools_per_query: Optional[int] = None
+    max_tools_per_query: Optional[int] = None,
+    on_result=None,
+    on_plan=None,
+    source_timeout: float = 30.0,
 ) -> dict:
     """
     Run all queries in parallel. Each query gets its own set of relevant tools.
     Returns: { "2d_array": [[input, website], ...], "summary": {...}, "results": [...] }
     """
+    if not 1 <= max_concurrent <= 32 or source_timeout <= 0:
+        raise ValueError("Concurrency must be 1–32 and source timeout must be positive")
+    plan = []
+    for query, input_type in queries:
+        relevant = get_relevant_tools(all_tools, input_type)
+        if max_tools_per_query is not None:
+            relevant = relevant[:max_tools_per_query]
+        plan.append((query, input_type, relevant))
+    planned_count = sum(len(relevant) for _, _, relevant in plan)
+    if on_plan:
+        on_plan(planned_count)
     semaphore = asyncio.Semaphore(max_concurrent)
 
     async with async_playwright() as p:
@@ -463,11 +513,8 @@ async def run_parallel_osint_search(
 
         # Launch parallel searches for all queries
         tasks = []
-        for query, input_type in queries:
-            relevant = get_relevant_tools(all_tools, input_type)
-            if max_tools_per_query is not None:
-                relevant = relevant[:max_tools_per_query]
-            tasks.append(search_one_query(query, input_type, relevant, context, semaphore, delay_between))
+        for query, input_type, relevant in plan:
+            tasks.append(search_one_query(query, input_type, relevant, context, semaphore, delay_between, on_result, source_timeout))
 
         try:
             all_results = await asyncio.gather(*tasks)
@@ -479,6 +526,11 @@ async def run_parallel_osint_search(
     for query_results in all_results:
         flat_results.extend(query_results)
 
+    return summarize_results(queries, flat_results, planned_count)
+
+
+def summarize_results(queries, flat_results, planned_count):
+    """Use identical counts for streamed snapshots and the final result."""
     # Build 2D array: [[input_value, website_name], ...]
     two_d_array = []
     for r in flat_results:
@@ -491,6 +543,7 @@ async def run_parallel_osint_search(
         "total_queries": len(queries),
         "queries": [{"value": q, "type": t.value} for q, t in queries],
         "total_tools_searched": len(flat_results),
+        "total_tools_planned": planned_count,
         "tools_with_matches": sum(1 for r in flat_results if r.match_count > 0),
         "total_matches": sum(r.match_count for r in flat_results),
         "two_d_array_size": len(two_d_array),

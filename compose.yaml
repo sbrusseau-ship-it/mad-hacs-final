@@ -6,7 +6,13 @@ services:
     init: true
     shm_size: 256mb
     environment:
+      SHERLOCK_CONCURRENCY: ${SHERLOCK_CONCURRENCY:-8}
+      SHERLOCK_REQUEST_TIMEOUT: ${SHERLOCK_REQUEST_TIMEOUT:-10}
+      SHERLOCK_SITES_URL: ${SHERLOCK_SITES_URL:-}
+      SHERLOCK_SITES_FILE: ${SHERLOCK_SITES_FILE:-}
       OSINT_MAX_TOOLS: ${OSINT_MAX_TOOLS:-0}
+      OSINT_CONCURRENCY: ${OSINT_CONCURRENCY:-8}
+      OSINT_SOURCE_TIMEOUT: ${OSINT_SOURCE_TIMEOUT:-30}
       OSINT_SCAN_TIMEOUT: ${OSINT_SCAN_TIMEOUT:-0}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]

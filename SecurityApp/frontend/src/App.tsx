@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { getSearch, startSearch, type ScanField, type SearchJob, type SearchResult } from "./api";
+import { followSearch, startSearch, type ScanField, type SearchJob, type SearchResult } from "./api";
 
 const scanFields: {
   id: ScanField;
@@ -11,12 +11,12 @@ const scanFields: {
   validate: (value: string) => boolean;
   error: string;
 }[] = [
-  { id: "email", label: "Email address", placeholder: "name@example.com", type: "email",
-    autoComplete: "email", validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-    error: "Enter an email like name@example.com." },
   { id: "username", label: "Username", placeholder: "your_handle", type: "text",
     autoComplete: "username", validate: (value) => /^[^\s\u0000-\u001f\u007f]{1,64}$/.test(value),
     error: "Enter up to 64 characters with no spaces." },
+  { id: "email", label: "Email address", placeholder: "name@example.com", type: "email",
+    autoComplete: "email", validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    error: "Enter an email like name@example.com." },
   { id: "name", label: "Name", placeholder: "Jordan Lee", type: "text",
     autoComplete: "name", validate: (value) => /\p{L}/u.test(value) && !/[\p{N}\p{Cc}]/u.test(value),
     error: "Enter a name with letters and no numbers." },
@@ -67,29 +67,34 @@ function ShieldIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-function SearchResults({ result }: { result: SearchResult }) {
+function SearchResults({ result, inProgress }: { result: SearchResult; inProgress: boolean }) {
   const summary = result.summary;
+  const orderedResults = result.results
+    .map((tool, index) => ({ tool, index }))
+    .sort((a, b) => Number(b.tool.match_count > 0) - Number(a.tool.match_count > 0));
+  const sourcesWithResults = summary.tools_with_matches + (summary.results_by_status.manual_review ?? 0);
   return (
     <section aria-label="Search results" className="mt-6 border-t border-white/15 pt-5">
       <h2 className="text-lg font-medium">Search results</h2>
       <p className="mt-2 text-sm leading-6 text-white/70">
-        {summary.total_queries} identifiers · {summary.total_tools_searched} sources checked · {summary.tools_with_matches} sources with potential matches
+        {summary.total_queries} identifiers · {summary.total_tools_searched} of {summary.total_tools_planned ?? summary.total_tools_searched} sources checked · {sourcesWithResults} sources with results
       </p>
       <p className="mt-2 text-sm text-white/60">
-        {summary.results_by_status.blocked ?? 0} blocked · {summary.results_by_status.error ?? 0} errors · {summary.results_by_status.manual_review ?? 0} require manual review
+        {summary.results_by_status.blocked ?? 0} blocked · {summary.results_by_status.error ?? 0} errors
       </p>
-      {summary.tools_with_matches === 0 && (
+      {!inProgress && sourcesWithResults === 0 && (
         <p className="mt-4 text-sm leading-6 text-white/70">No potential matches found in the sources checked. Blocked or failed sources could not be assessed.</p>
       )}
       <div className="mt-4 max-h-[480px] space-y-3 overflow-y-auto">
-        {result.results.map((tool, index) => (
-          <details key={index} className="rounded border border-white/15 bg-black/20 p-3">
+        {orderedResults.map(({ tool, index }) => (
+          <details key={`${tool.input_type}:${tool.input_value}:${tool.tool_name}:${tool.url_searched}:${index}`} className="rounded border border-white/15 bg-black/20 p-3">
             <summary className="cursor-pointer text-sm leading-6">
-              {tool.tool_name} <span className={tool.match_count > 0 ? "text-[#4da3ff]" : "text-white/60"}>— {tool.status === "manual_review" ? "search query — manual review required" : tool.status.replace(/_/g, " ")}{tool.match_count > 0 ? ` (${tool.match_count} potential matches)` : ""}</span>
+              {tool.tool_name} {tool.status !== "manual_review" && <span className={tool.match_count > 0 ? "text-[#4da3ff]" : "text-white/60"}>— {tool.status.replace(/_/g, " ")}{tool.match_count > 0 ? ` (${tool.match_count} potential matches)` : ""}</span>}
             </summary>
             <div className="mt-2 space-y-2 break-words text-sm leading-6 text-white/65">
               <p>Identifier: {tool.input_value}</p>
               <p>Category: {tool.category}</p>
+              {tool.backend === "sherlock" && <p>Backend: Sherlock</p>}
               {tool.final_url && <p>Page visited: {tool.final_url}</p>}
               {/^https?:\/\//i.test(tool.url_searched) && (
                 <a className="block text-[#4da3ff] underline" href={tool.url_searched} target="_blank" rel="noreferrer">Review source ↗</a>
@@ -106,7 +111,7 @@ function SearchResults({ result }: { result: SearchResult }) {
 
 export default function App() {
   const [enabled, setEnabled] = useState<Record<ScanField, boolean>>({
-    email: true,
+    email: false,
     username: true,
     name: false,
     ssn: false,
@@ -161,19 +166,12 @@ export default function App() {
         filledFields.map(({ id }) => [id, values[id].trim()]),
       ), controller.signal);
       setJob(current);
-      while (current.status === "queued" || current.status === "running") {
-        setScanMessage(current.message || "Searching public sources. This may take several minutes.");
-        await new Promise<void>((resolve, reject) => {
-          const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
-          const timer = window.setTimeout(() => {
-            controller.signal.removeEventListener("abort", abort);
-            resolve();
-          }, 1000);
-          controller.signal.addEventListener("abort", abort, { once: true });
-        });
-        current = await getSearch(current.id, controller.signal);
-        setJob(current);
-      }
+      setScanMessage(current.message || "Search queued.");
+      current = await followSearch(current.id, controller.signal, (update) => {
+        setJob(update);
+        setScanMessage(update.message || "Searching public sources.");
+        setElapsed(Math.round(performance.now() - started));
+      });
       if (current.status === "failed") throw new Error(current.error || "The search failed. Try again.");
       if (!current.result) throw new Error("The server completed the search without results.");
       setScanMessage(current.message || "Search completed.");
@@ -191,6 +189,7 @@ export default function App() {
   const filledFields = activeFields.filter(({ id }) => values[id].trim());
   const invalidFields = filledFields.filter(({ id, validate }) => !validate(values[id].trim()));
   const isReady = filledFields.length > 0;
+  const grade = job?.result?.grade;
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#080a09] text-[#f2f5f0]">
@@ -236,18 +235,18 @@ export default function App() {
               Search public sources for your identifiers and review potential matches in one place.
             </p>
 
-            <div className="mt-10 grid max-w-lg grid-cols-3 border-y border-white/[0.14] py-5">
+            <div role="region" aria-label="Scan statistics" className="mt-10 grid max-w-lg grid-cols-3 border-y border-white/[0.14] py-5">
               <div>
-                <div className="font-mono text-lg text-white">7</div>
-                <div className="mt-1 text-sm text-white/55">Identifier types</div>
+                <div className="font-mono text-lg text-white">{grade ? `${grade.percent_matches}%` : "—"}</div>
+                <div className="mt-1 text-sm text-white/55">Percent matches</div>
               </div>
               <div className="border-l border-white/[0.14] pl-5 sm:pl-7">
-                <div className="font-mono text-lg text-white">OSINT</div>
-                <div className="mt-1 text-sm text-white/55">Public sources</div>
+                <div className="font-mono text-lg text-white">{grade ? grade.sites_with_hits.toLocaleString() : "—"}</div>
+                <div className="mt-1 text-sm text-white/55">Sites with matches</div>
               </div>
               <div className="border-l border-white/[0.14] pl-5 sm:pl-7">
-                <div className="font-mono text-lg text-[#4da3ff]">Live</div>
-                <div className="mt-1 text-sm text-white/55">Source checks</div>
+                <div className="font-mono text-lg text-[#4da3ff]">{grade ? grade.total_sites.toLocaleString() : "—"}</div>
+                <div className="mt-1 text-sm text-white/55">Sites searched</div>
               </div>
             </div>
 
@@ -286,6 +285,7 @@ export default function App() {
                         key={field.id}
                         type="button"
                         disabled={isScanning}
+                        aria-pressed={enabled[field.id]}
                         onClick={() => toggleField(field.id)}
                         className={`rounded border px-3 py-2 font-mono text-xs tracking-[0.06em] transition ${
                           enabled[field.id]
@@ -375,6 +375,13 @@ export default function App() {
                   </p>
                 )}
 
+                {job?.progress && (
+                  <div className="mt-4">
+                    <progress aria-label="Source search progress" value={job.progress.completed_sources} max={Math.max(job.progress.total_sources, 1)} className="h-2 w-full accent-[#4da3ff]" />
+                    <p className="mt-1 font-mono text-xs text-white/60">{job.progress.completed_sources} / {job.progress.total_sources} sources finished</p>
+                  </div>
+                )}
+
                 {scanMessage && (
                   <div className="mt-5 border-l-2 border-[#4da3ff] bg-[#4da3ff]/[0.06] px-4 py-3">
                     <p role="status" className="text-sm leading-6 text-white/65">
@@ -384,7 +391,7 @@ export default function App() {
                 )}
 
                 {scanError && <p role="alert" className="mt-5 rounded border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">{scanError}</p>}
-                {job?.status === "completed" && job.result && <SearchResults result={job.result} />}
+                {job?.result && <SearchResults result={job.result} inProgress={isScanning} />}
 
                 <div className="mt-5 flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.08em] text-white/45">
                   <ShieldIcon size={12} />

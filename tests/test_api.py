@@ -12,6 +12,11 @@ from SecurityApp.Backend import InputType, Tool, ToolResult
 
 class ApiTests(unittest.TestCase):
     def setUp(self):
+        async def no_sherlock(username, on_plan, on_result):
+            on_plan(0)
+        self.sherlock_patch = patch.object(api, 'run_sherlock', side_effect=no_sherlock)
+        self.sherlock_mock = self.sherlock_patch.start()
+        self.addCleanup(self.sherlock_patch.stop)
         api.jobs.clear()
         self.client_context = TestClient(api.app)
         self.client = self.client_context.__enter__()
@@ -57,6 +62,13 @@ class ApiTests(unittest.TestCase):
         self.assertIsNone(job["result"]["summary"]["tool_limit_per_query"])
         self.assertEqual(job["result"]["results"][0]["match_count"], 2)
         self.assertEqual(job["result"]["matches"], [["123456789", "Fixture"]])
+        stream = self.client.get(f"/api/search/{job['id']}/events")
+        self.assertEqual(stream.status_code, 200)
+        import json
+        snapshot = json.loads(stream.text.split("data: ", 1)[1])
+        self.assertEqual(snapshot["status"], "completed")
+        self.assertNotIn("_revision", snapshot)
+        self.assertEqual(snapshot["result"], job["result"])
         self.assertIn(("123456789", InputType.SSN), seen)
         self.assertIn(("李", InputType.NAME), seen)
         self.assertIn(("123 Main St", InputType.ADDRESS), seen)
@@ -111,6 +123,50 @@ class ApiTests(unittest.TestCase):
         # tearDown still owns an open context.
         self.client_context = TestClient(api.app)
         self.client = self.client_context.__enter__()
+
+    def test_username_uses_sherlock_and_email_does_not(self):
+        async def sherlock(username, on_plan, on_result):
+            on_plan(1)
+            on_result(ToolResult(username, 'username', 'Sherlock · Fixture', 'Username', 'https://example.com/u/sample', 'success', 1, backend='sherlock'))
+
+        async def browser(queries, tools, **kwargs):
+            kwargs['on_plan'](1)
+            row = ToolResult(queries[0][0], queries[0][1].value, 'Browser fixture', 'Username', 'https://example.com', 'no_match')
+            kwargs['on_result'](row)
+            return api.scanner.summarize_results(queries, [row], 1)
+
+        self.sherlock_mock.side_effect = sherlock
+        with patch.object(api.scanner, 'fetch_osint_tree', return_value={}), patch.object(api.scanner, 'flatten_tree', return_value=[object()]), patch.object(api.scanner, 'run_parallel_osint_search', side_effect=browser):
+            accepted = self.client.post('/api/search', json={'identifiers': {'username': 'sample'}}).json()
+            job = self.wait_job(accepted['id'])
+            self.assertEqual(job['status'], 'completed')
+            self.assertEqual(job['progress'], {'completed_sources': 2, 'total_sources': 2})
+            self.assertEqual({r['backend'] for r in job['result']['results']}, {'browser', 'sherlock'})
+            self.assertEqual(job['result']['summary']['tools_with_matches'], 1)
+            self.sherlock_mock.assert_awaited_once()
+            self.sherlock_mock.reset_mock()
+            accepted = self.client.post('/api/search', json={'identifiers': {'email': 'sample@example.com'}}).json()
+            job = self.wait_job(accepted['id'])
+            self.assertEqual(job['status'], 'completed')
+            self.sherlock_mock.assert_not_awaited()
+
+    def test_sherlock_failure_preserves_browser_results(self):
+        self.sherlock_mock.side_effect = RuntimeError('upstream failure')
+
+        async def browser(queries, tools, **kwargs):
+            kwargs['on_plan'](1)
+            row = ToolResult('sample', 'username', 'Browser fixture', 'Username', 'https://example.com', 'success', 1)
+            kwargs['on_result'](row)
+            return api.scanner.summarize_results(queries, [row], 1)
+
+        with patch.object(api.scanner, 'fetch_osint_tree', return_value={}), patch.object(api.scanner, 'flatten_tree', return_value=[object()]), patch.object(api.scanner, 'run_parallel_osint_search', side_effect=browser):
+            accepted = self.client.post('/api/search', json={'identifiers': {'username': 'sample'}}).json()
+            job = self.wait_job(accepted['id'])
+        self.assertEqual(job['status'], 'completed')
+        self.assertEqual(job['result']['summary']['tools_with_matches'], 1)
+        self.assertEqual(job['progress'], {'completed_sources': 2, 'total_sources': 2})
+        self.assertEqual(job['result']['results'][-1]['backend'], 'sherlock')
+        self.assertEqual(job['result']['results'][-1]['status'], 'error')
 
     def test_scanner_closes_browser_when_cancelled(self):
         async def verify():

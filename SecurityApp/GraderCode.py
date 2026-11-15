@@ -1,4 +1,6 @@
+"""Grade scanner counts directly, or read the same counts from a text report."""
 from pathlib import Path
+from typing import Mapping
 
 
 def extract_report_counts(file_path: str | Path) -> dict[str, int]:
@@ -21,19 +23,31 @@ def extract_report_counts(file_path: str | Path) -> dict[str, int]:
     missing = [label for label, key in fields.items() if key not in counts]
     raise ValueError(f"Missing report fields: {', '.join(missing)}")
 
+
+def grade_counts(counts: Mapping[str, int]) -> dict:
+    total_tools_searched = counts["total_tools_searched"]
+    tools_with_matches = counts["tools_with_matches"]
+    total_matches = counts["total_matches"]
+    if not 0 <= tools_with_matches <= total_tools_searched or total_matches < 0:
+        raise ValueError("Report counts must be nonnegative, with matched sites no greater than searched sites.")
+
+    percent_matches = 0.0
+    if total_tools_searched > 0:
+        percent_matches = (tools_with_matches / total_tools_searched) * 100
+
+    return {
+        "percent_matches": round(percent_matches, 2),
+        "total_sites": total_tools_searched,
+        "sites_with_hits": tools_with_matches,
+        "total_matches": total_matches,
+    }
+
+
 class ReportAnalyzer:
     @staticmethod
     def read_counts(file_path: str | Path) -> dict[str, int]:
         return extract_report_counts(file_path)  # Use the function from above.
 
-
-report_path = ReportGenerator().create_report("report.txt")
-counts = ReportAnalyzer.read_counts(report_path)
-
-total_tools_searched = counts["total_tools_searched"]
-tools_with_matches = counts["tools_with_matches"]
-total_matches = counts["total_matches"]
-
-percent_matches = 0
-if (tools_with_matches > 0):
-    percent_matches = (tools_with_mathces / total_tools_searched) * 100
+    @staticmethod
+    def grade_report(file_path: str | Path) -> dict:
+        return grade_counts(extract_report_counts(file_path))

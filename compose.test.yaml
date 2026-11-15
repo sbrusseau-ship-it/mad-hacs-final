@@ -1,8 +1,9 @@
 services:
   backend:
     environment:
+      SHERLOCK_SITES_URL: http://fixtures:9000/sherlock.json
       OSINT_TREE_URL: http://fixtures:9000/tree.json
-      OSINT_MAX_TOOLS: 3
+      OSINT_MAX_TOOLS: 4
       OSINT_PAGE_WAIT_MS: 0
       OSINT_SCAN_TIMEOUT: 30
     depends_on:
