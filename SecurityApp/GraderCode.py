@@ -36,4 +36,4 @@ total_matches = counts["total_matches"]
 
 percent_matches = 0
 if (tools_with_matches > 0):
-    percent_matches = tools_with_mathces / total_tools_searched
+    percent_matches = (tools_with_mathces / total_tools_searched) * 100
