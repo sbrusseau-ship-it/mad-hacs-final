@@ -1,12 +1,53 @@
 import { type FormEvent, useState } from "react";
 
-type ScanField = "email" | "username" | "password";
+type ScanField = "email" | "username" | "name" | "ssn" | "phone" | "address" | "ip";
 
-const scanFields: { id: ScanField; label: string; placeholder: string; type: string }[] = [
-  { id: "email", label: "Email address", placeholder: "name@example.com", type: "email" },
-  { id: "username", label: "Username", placeholder: "your_handle", type: "text" },
-  { id: "password", label: "Password", placeholder: "Enter a password to check", type: "password" },
+const scanFields: {
+  id: ScanField;
+  label: string;
+  placeholder: string;
+  type: string;
+  inputMode?: "numeric";
+  autoComplete?: string;
+  validate: (value: string) => boolean;
+  error: string;
+}[] = [
+  { id: "email", label: "Email address", placeholder: "name@example.com", type: "email",
+    autoComplete: "email", validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    error: "Enter an email like name@example.com." },
+  { id: "username", label: "Username", placeholder: "your_handle", type: "text",
+    autoComplete: "username", validate: (value) => /^[^\s\u0000-\u001f\u007f]{1,64}$/.test(value),
+    error: "Enter up to 64 characters with no spaces." },
+  { id: "name", label: "Name", placeholder: "Jordan Lee", type: "text",
+    autoComplete: "name", validate: (value) => /\p{L}/u.test(value) && !/[\p{N}\p{Cc}]/u.test(value),
+    error: "Enter a name with letters and no numbers." },
+  { id: "ssn", label: "SSN", placeholder: "XXX-XX-XXXX", type: "password",
+    inputMode: "numeric", validate: (value) => /^(?:[0-9]{9}|[0-9]{3}-[0-9]{2}-[0-9]{4})$/.test(value),
+    error: "Enter 9 digits, with or without dashes." },
+  { id: "phone", label: "Phone number", placeholder: "(202) 555-0142", type: "tel",
+    autoComplete: "tel-national",
+    validate: (value) => /^(?:\([0-9]{3}\)|[0-9]{3})[ .-]?[0-9]{3}[ .-]?[0-9]{4}$/.test(value),
+    error: "Enter a 10-digit US phone number." },
+  { id: "address", label: "Address", placeholder: "123 Example Street", type: "text",
+    autoComplete: "street-address", validate: (value) => /\p{L}/u.test(value) && !/\p{Cc}/u.test(value),
+    error: "Enter an address that includes a street or place name." },
+  { id: "ip", label: "IP address", placeholder: "192.0.2.1 or 2001:db8::1", type: "text",
+    validate: isIpAddress, error: "Enter a valid IPv4 or IPv6 address." },
 ];
+
+function isIpAddress(value: string): boolean {
+  if (/^(?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){3}$/.test(value)) {
+    return value.split(".").every((part) => Number(part) <= 255);
+  }
+
+  if (!value.includes(":") || !/^[0-9a-f:.]+$/i.test(value)) return false;
+  try {
+    new URL("http://[" + value + "]/");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function ShieldIcon({ size = 18 }: { size?: number }) {
   return (
@@ -27,34 +68,26 @@ function ShieldIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-function EyeIcon({ hidden }: { hidden: boolean }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M3 12s3.3-5 9-5 9 5 9 5-3.3 5-9 5-9-5-9-5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <circle cx="12" cy="12" r="2.2" stroke="currentColor" strokeWidth="1.6" />
-      {hidden && (
-        <path d="m4 4 16 16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      )}
-    </svg>
-  );
-}
-
 export default function App() {
   const [enabled, setEnabled] = useState<Record<ScanField, boolean>>({
     email: true,
     username: true,
-    password: false,
+    name: false,
+    ssn: false,
+    phone: false,
+    address: false,
+    ip: false,
   });
   const [values, setValues] = useState<Record<ScanField, string>>({
     email: "",
     username: "",
-    password: "",
+    name: "",
+    ssn: "",
+    phone: "",
+    address: "",
+    ip: "",
   });
-  const [showPassword, setShowPassword] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
 
@@ -66,15 +99,22 @@ export default function App() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isReady || isScanning) return;
-
+    setShowValidation(true);
     setScanMessage("");
+    if (invalidFields.length > 0) return;
+
+    setShowValidation(false);
     setIsScanning(true);
     try {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fields: activeFields.filter(({ id }) => values[id].trim()).map(({ id }) => id),
+           identifiers: Object.fromEntries(
+            filledFields
+            .filter(({ id }) => id !== "ssn")
+            .map(({ id }) => [id, values[id].trim()]),
+          ),
         }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -92,7 +132,9 @@ export default function App() {
   };
 
   const activeFields = scanFields.filter(({ id }) => enabled[id]);
-  const isReady = activeFields.length > 0 && activeFields.some(({ id }) => values[id].trim());
+  const filledFields = activeFields.filter(({ id }) => values[id].trim());
+  const invalidFields = filledFields.filter(({ id, validate }) => !validate(values[id].trim()));
+  const isReady = filledFields.length > 0;
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#080a09] text-[#f2f5f0]">
@@ -159,8 +201,7 @@ export default function App() {
                 <ShieldIcon size={17} />
               </span>
               <p className="text-sm leading-6 text-white/65">
-                Privacy first. Search values should be hashed client-side before reaching a
-                production API. Never enter a password you currently use.
+                Use sample data in this demo. Only the types of fields you fill in are sent to the demo backend.
               </p>
             </div>
           </div>
@@ -179,7 +220,7 @@ export default function App() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-5 sm:p-7">
+              <form noValidate onSubmit={handleSubmit} className="p-5 sm:p-7">
                 <div className="mb-7">
                   <p className="font-mono text-xs uppercase tracking-[0.12em] text-white/60">
                     Select identifiers
@@ -221,7 +262,10 @@ export default function App() {
                           &gt;_
                         </span>
                         <input
-                          type={field.id === "password" && showPassword ? "text" : field.type}
+                          type={field.type}
+                          inputMode={field.inputMode}
+                          aria-invalid={showValidation && invalidFields.includes(field)}
+                          aria-describedby={showValidation && invalidFields.includes(field) ? field.id + "-error" : undefined}
                           value={values[field.id]}
                           disabled={isScanning}
                           onChange={(event) => {
@@ -232,20 +276,15 @@ export default function App() {
                             setScanMessage("");
                           }}
                           placeholder={field.placeholder}
-                          autoComplete={field.id === "password" ? "new-password" : field.id}
+                          autoComplete={field.autoComplete ?? "off"}
                           className="h-13 w-full rounded-md border border-white/20 bg-black/25 pl-13 pr-12 font-mono text-sm text-white outline-none transition placeholder:text-white/40 focus:border-[#4da3ff]/75 focus:bg-[#4da3ff]/[0.04] focus:shadow-[0_0_0_3px_rgba(77,163,255,0.08)]"
                         />
-                        {field.id === "password" && (
-                          <button
-                            type="button"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
-                            onClick={() => setShowPassword((current) => !current)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/55 transition hover:text-white"
-                          >
-                            <EyeIcon hidden={!showPassword} />
-                          </button>
-                        )}
                       </span>
+                      {showValidation && invalidFields.includes(field) && (
+                        <span id={field.id + "-error"} className="mt-2 block text-sm text-red-300">
+                          {field.error}
+                        </span>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -274,6 +313,12 @@ export default function App() {
                     </>
                   )}
                 </button>
+
+                {showValidation && invalidFields.length > 0 && (
+                  <p role="alert" className="mt-3 text-sm text-red-300">
+                    Fix the highlighted fields and try again.
+                  </p>
+                )}
 
                 {scanMessage && (
                   <div className="mt-5 border-l-2 border-[#4da3ff] bg-[#4da3ff]/[0.06] px-4 py-3">
