@@ -1,0 +1,166 @@
+===========================================================================
+  OSINT PARALLEL SEARCH REPORT
+  Generated: 2026-11-14T23:57:50.655379
+===========================================================================
+
+QUERIES:
+  • Alberto Estrada (name)
+
+SUMMARY:
+  Total queries:        1
+  Total tools searched: 205
+  Tools with matches:   4
+  Total matches:        594
+  2D array entries:     4
+
+STATUS BREAKDOWN:
+  success     : 4
+  no_match    : 167
+  blocked     : 14
+  error       : 20
+
+===========================================================================
+  2D ARRAY: [input_value, website_name]
+===========================================================================
+
+[
+  ["Alberto Estrada", "Orkut (Brazil)"],
+  ["Alberto Estrada", "Google Scholar Case Law"],
+  ["Alberto Estrada", "Google Patent Search"],
+  ["Alberto Estrada", "Google Finance"]
+]
+
+===========================================================================
+  DETAILED RESULTS (tools with matches)
+===========================================================================
+
+✅ Alberto Estrada                | Google Finance                      | 153 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=Alberto%20Estrada
+   → Text matches: 18
+   → HTML matches: 129
+   → Matching links: 5
+
+✅ Alberto Estrada                | Orkut (Brazil)                      | 152 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=Alberto%20Estrada
+   → Text matches: 18
+   → HTML matches: 128
+   → Matching links: 5
+
+✅ Alberto Estrada                | Google Patent Search                | 152 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=Alberto%20Estrada
+   → Text matches: 18
+   → HTML matches: 128
+   → Matching links: 5
+
+✅ Alberto Estrada                | Google Scholar Case Law             | 137 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=Alberto%20Estrada
+   → Text matches: 15
+   → HTML matches: 117
+   → Matching links: 4
+
+===========================================================================
+  TOOLS WITH NO MATCHES
+===========================================================================
+
+201 tools returned no matches.
+
+Blocked (14):
+  • Facebook Photos by ID (M) — HTTP 404
+  • Fedifinder — HTTP 410
+  • Tweepsect — HTTP 429
+  • Spoonbill — HTTP 521
+  • Reddit Archive — HTTP 404
+  • TTAnon — HTTP 403
+  • BlackPlanet.com - Member Find — HTTP 404
+  • ThatsThem — HTTP 403
+  • Ancestry.com — HTTP 403
+  • AnyWho — HTTP 404
+  • Neighbor Report — HTTP 403
+  • World Legal Information Institute — HTTP 403
+  • Find A Grave — HTTP 403
+  • AIHIT — HTTP 502
+
+Errors (20):
+  • Twopcharts — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://twopcharts.com/
+Call log:
+  - navigating to "https://twopcharts.com/", waiting until "domcontentloaded"
+
+  • GeoSocial Footprint — Page.goto: net::ERR_CONNECTION_CLOSED at https://geosocialfootprint.com/
+Call log:
+  - navigating to "https://geosocialfootprint.com/", waiting until "domcontentloaded"
+
+  • One Million Tweet Map — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://onemilliontweetmap.com/
+Call log:
+  - navigating to "https://onemilliontweetmap.com/", waiting until "domcontentloaded"
+
+  • Ask FM — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://ask.fm/%3Cusername%3E
+Call log:
+  - navigating to "https://ask.fm/%3Cusername%3E", waiting until "domcontentloaded"
+
+  • Snitch.name — Page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://snitch.name/
+Call log:
+  - navigating to "https://snitch.name/", waiting until "domcontentloaded"
+
+  • AYI.com — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.ayichat.com/", waiting until "domcontentloaded"
+
+  • Melissa Data - Property Viewer (R) — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://melissa-data.com/
+Call log:
+  - navigating to "https://melissa-data.com/", waiting until "domcontentloaded"
+
+  • Emporis — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.emporis.com/", waiting until "domcontentloaded"
+
+  • CrimeReports.com — Page.goto: net::ERR_CERT_DATE_INVALID at https://crimereports.com/
+Call log:
+  - navigating to "https://crimereports.com/", waiting until "domcontentloaded"
+
+  • Voter Registration Data — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://www.sos.secretary.state.gov/
+Call log:
+  - navigating to "https://www.sos.secretary.state.gov/", waiting until "domcontentloaded"
+
+  • MelissaData - Campaign Contributions — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://melissa-data.com/
+Call log:
+  - navigating to "https://melissa-data.com/", waiting until "domcontentloaded"
+
+  • EU Sanctions Tool (D) — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://sanctions-tool.ec.europa.eu/
+Call log:
+  - navigating to "https://sanctions-tool.ec.europa.eu/", waiting until "domcontentloaded"
+
+  • Public Register Online — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.annualreportservice.com/", waiting until "domcontentloaded"
+
+  • Public Register's Annual Report Service — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.prars.com/search/alpha/A?q=Alberto%20Estrada", waiting until "domcontentloaded"
+
+  • Plonked — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.plonked.com/", waiting until "domcontentloaded"
+
+  • Rusprofile — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.rusprofile.ru/", waiting until "domcontentloaded"
+
+  • Companies In The UK — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.companiesintheuk.co.uk/", waiting until "domcontentloaded"
+
+  • Orbis Directory — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://orbisdirectory.bvdinfo.com/version-2016121/OrbisDirectory/Companies
+Call log:
+  - navigating to "https://orbisdirectory.bvdinfo.com/version-2016121/Orb
+  • CVGadget — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://cvgadget.com/
+Call log:
+  - navigating to "https://cvgadget.com/", waiting until "domcontentloaded"
+
+  • RBA - Business Information Resources — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.rba.co.uk/sources", waiting until "domcontentloaded"
+

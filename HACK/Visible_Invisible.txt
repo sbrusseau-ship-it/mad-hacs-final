@@ -1,0 +1,7 @@
+First CD into the folder which has the file :
+
+#Replace <FileName> with the actual file name.
+
+For Visibility and Popups: python <FileName>.py --visible --delay 2 --concurrent 2
+
+For Delay and no Popups: python <FileName>.py --delay 5 --concurrent 1

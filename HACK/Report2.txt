@@ -1,0 +1,259 @@
+===========================================================================
+  OSINT PARALLEL SEARCH REPORT
+  Generated: 2026-11-14T23:36:45.610465
+===========================================================================
+
+QUERIES:
+  • Alberto Estrada (name)
+  • 20/13/2007 (dob)
+
+SUMMARY:
+  Total queries:        2
+  Total tools searched: 309
+  Tools with matches:   4
+  Total matches:        29
+  2D array entries:     4
+
+STATUS BREAKDOWN:
+  success     : 4
+  no_match    : 218
+  blocked     : 53
+  error       : 34
+
+===========================================================================
+  2D ARRAY: [input_value, website_name]
+===========================================================================
+
+[
+  ["20/13/2007", "Google Scholar Case Law"],
+  ["20/13/2007", "US Patent Office Search"],
+  ["20/13/2007", "Google Patent Search"],
+  ["20/13/2007", "Google Finance"]
+]
+
+===========================================================================
+  DETAILED RESULTS (tools with matches)
+===========================================================================
+
+✅ 20/13/2007                     | US Patent Office Search             | 11 matches
+   Category: OSINT Framework
+   URL: https://www.uspto.gov/patents/search?q=20/13/2007
+   → Matching links: 11
+
+✅ 20/13/2007                     | Google Scholar Case Law             | 6 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=20/13/2007
+   → Text matches: 1
+   → HTML matches: 3
+   → Matching links: 1
+
+✅ 20/13/2007                     | Google Patent Search                | 6 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=20/13/2007
+   → Text matches: 1
+   → HTML matches: 3
+   → Matching links: 1
+
+✅ 20/13/2007                     | Google Finance                      | 6 matches
+   Category: OSINT Framework
+   URL: https://www.google.com/search?q=20/13/2007
+   → Text matches: 1
+   → HTML matches: 3
+   → Matching links: 1
+
+===========================================================================
+  TOOLS WITH NO MATCHES
+===========================================================================
+
+305 tools returned no matches.
+
+Blocked (53):
+  • Facebook Photos by ID (M) — HTTP 404
+  • Fedifinder — HTTP 410
+  • Twitter Advanced Search — HTTP 403
+  • Twitter Location Search — HTTP 403
+  • Twitter Date Search — HTTP 403
+  • Tweepsect — HTTP 429
+  • Spoonbill — HTTP 521
+  • Reddit Archive — HTTP 404
+  • TTAnon — HTTP 403
+  • BlackPlanet.com - Member Find — HTTP 404
+  • InfoFlow Public People Search In Chilean — HTTP 403
+  • ThatsThem — HTTP 403
+  • FamilySearch.org — HTTP 403
+  • Ancestry.com — HTTP 403
+  • AnyWho — HTTP 403
+  • Addresses.com — HTTP 403
+  • Neighbor Report — HTTP 403
+  • Redfin — HTTP 429
+  • World Legal Information Institute — HTTP 403
+  • Most Wanted Criminal Pages — HTTP 403
+  • CourtListener — HTTP 403
+  • Docket Alarm — HTTP 403
+  • Free Law RECAP Archive — HTTP 403
+  • NC Salary DB — HTTP 403
+  • Death Check — HTTP 403
+  • Find A Grave — HTTP 403
+  • GraveInfo — HTTP 403
+  • Political MoneyLine — HTTP 403
+  • Searchable FCC ID Database — HTTP 403
+  • Ukraine PEP Register (D) — HTTP 403
+  • SEC.gov - EDGAR — HTTP 403
+  • AIHIT — HTTP 502
+  • InfoFlow Public People Search In Chilean — HTTP 403
+  • ThatsThem — HTTP 403
+  • FamilySearch.org — HTTP 403
+  • Ancestry.com — HTTP 403
+  • AnyWho — HTTP 403
+  • Addresses.com — HTTP 403
+  • Neighbor Report — HTTP 403
+  • Redfin — HTTP 429
+  • World Legal Information Institute — HTTP 403
+  • Most Wanted Criminal Pages — HTTP 403
+  • CourtListener — HTTP 403
+  • Docket Alarm — HTTP 403
+  • Free Law RECAP Archive — HTTP 403
+  • NC Salary DB — HTTP 403
+  • Death Check — HTTP 403
+  • Find A Grave — HTTP 403
+  • GraveInfo — HTTP 403
+  • Political MoneyLine — HTTP 403
+  • Searchable FCC ID Database — HTTP 403
+  • SEC.gov - EDGAR — HTTP 403
+  • AIHIT — HTTP 502
+
+Errors (34):
+  • Twopcharts — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://twopcharts.com/
+Call log:
+  - navigating to "https://twopcharts.com/", waiting until "domcontentloaded"
+
+  • Tweet Metadata — Page.goto: Download is starting
+Call log:
+  - navigating to "https://www.wsj.com/public/resources/documents/TweetMetadata.pdf", waiting until "domcontentloaded"
+
+  • GeoSocial Footprint — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://geosocialfootprint.com/", waiting until "domcontentloaded"
+
+  • One Million Tweet Map — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://onemilliontweetmap.com/
+Call log:
+  - navigating to "https://onemilliontweetmap.com/", waiting until "domcontentloaded"
+
+  • Ask FM — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://ask.fm/%3Cusername%3E
+Call log:
+  - navigating to "https://ask.fm/%3Cusername%3E", waiting until "domcontentloaded"
+
+  • Snitch.name — Page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://snitch.name/
+Call log:
+  - navigating to "https://snitch.name/", waiting until "domcontentloaded"
+
+  • Melissa Data - Property Viewer (R) — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://melissa-data.com/
+Call log:
+  - navigating to "https://melissa-data.com/", waiting until "domcontentloaded"
+
+  • Emporis — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.emporis.com/", waiting until "domcontentloaded"
+
+  • CrimeReports.com — Page.goto: net::ERR_CERT_DATE_INVALID at https://crimereports.com/
+Call log:
+  - navigating to "https://crimereports.com/", waiting until "domcontentloaded"
+
+  • Voter Registration Data — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://www.sos.secretary.state.gov/
+Call log:
+  - navigating to "https://www.sos.secretary.state.gov/", waiting until "domcontentloaded"
+
+  • MelissaData - Campaign Contributions — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://melissa-data.com/
+Call log:
+  - navigating to "https://melissa-data.com/", waiting until "domcontentloaded"
+
+  • EU Sanctions Tool (D) — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://sanctions-tool.ec.europa.eu/
+Call log:
+  - navigating to "https://sanctions-tool.ec.europa.eu/", waiting until "domcontentloaded"
+
+  • Public Register Online — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.annualreportservice.com/", waiting until "domcontentloaded"
+
+  • Public Register's Annual Report Service — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.prars.com/search/alpha/A?q=Alberto%20Estrada", waiting until "domcontentloaded"
+
+  • Plonked — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.plonked.com/", waiting until "domcontentloaded"
+
+  • Rusprofile — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.rusprofile.ru/", waiting until "domcontentloaded"
+
+  • Owler (R) — Page.goto: net::ERR_HTTP2_PROTOCOL_ERROR at https://www.owler.com/corp
+Call log:
+  - navigating to "https://www.owler.com/corp", waiting until "domcontentloaded"
+
+  • Orbis Directory — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://orbisdirectory.bvdinfo.com/version-2016121/OrbisDirectory/Companies
+Call log:
+  - navigating to "https://orbisdirectory.bvdinfo.com/version-2016121/Orb
+  • CVGadget — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://cvgadget.com/
+Call log:
+  - navigating to "https://cvgadget.com/", waiting until "domcontentloaded"
+
+  • RBA - Business Information Resources — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.rba.co.uk/sources", waiting until "domcontentloaded"
+
+  • Snitch.name — Page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://snitch.name/
+Call log:
+  - navigating to "https://snitch.name/", waiting until "domcontentloaded"
+
+  • Melissa Data - Property Viewer (R) — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://melissa-data.com/
+Call log:
+  - navigating to "https://melissa-data.com/", waiting until "domcontentloaded"
+
+  • Emporis — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.emporis.com/", waiting until "domcontentloaded"
+
+  • CrimeReports.com — Page.goto: net::ERR_CERT_DATE_INVALID at https://crimereports.com/
+Call log:
+  - navigating to "https://crimereports.com/", waiting until "domcontentloaded"
+
+  • Voter Registration Data — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://www.sos.secretary.state.gov/
+Call log:
+  - navigating to "https://www.sos.secretary.state.gov/", waiting until "domcontentloaded"
+
+  • MelissaData - Campaign Contributions — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://melissa-data.com/
+Call log:
+  - navigating to "https://melissa-data.com/", waiting until "domcontentloaded"
+
+  • Public Register Online — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.annualreportservice.com/", waiting until "domcontentloaded"
+
+  • Public Register's Annual Report Service — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.prars.com/search/alpha/A?q=20/13/2007", waiting until "domcontentloaded"
+
+  • Plonked — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.plonked.com/", waiting until "domcontentloaded"
+
+  • Rusprofile — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.rusprofile.ru/", waiting until "domcontentloaded"
+
+  • Owler (R) — Page.goto: net::ERR_HTTP2_PROTOCOL_ERROR at https://www.owler.com/corp
+Call log:
+  - navigating to "https://www.owler.com/corp", waiting until "domcontentloaded"
+
+  • Orbis Directory — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://orbisdirectory.bvdinfo.com/version-2016121/OrbisDirectory/Companies
+Call log:
+  - navigating to "https://orbisdirectory.bvdinfo.com/version-2016121/Orb
+  • CVGadget — Page.goto: net::ERR_NAME_NOT_RESOLVED at https://cvgadget.com/
+Call log:
+  - navigating to "https://cvgadget.com/", waiting until "domcontentloaded"
+
+  • RBA - Business Information Resources — Page.goto: Timeout 20000ms exceeded.
+Call log:
+  - navigating to "https://www.rba.co.uk/sources", waiting until "domcontentloaded"
+
