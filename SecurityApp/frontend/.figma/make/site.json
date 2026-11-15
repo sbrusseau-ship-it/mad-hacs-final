@@ -1,0 +1,11 @@
+{
+  "title": "CatPhish",
+  "description": "A dark, code-inspired dashboard lets users enter email, username, and password details to prepare for data leak checks through a placeholder workflow.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
