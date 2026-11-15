@@ -11,7 +11,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, List, Tuple
-from urllib.parse import urlparse, quote
+from urllib.parse import urlparse, quote, parse_qsl, urlencode, urlunparse
 from collections import defaultdict
 
 import requests
@@ -29,7 +29,11 @@ OSINT_JSON_URL = "https://raw.githubusercontent.com/lockfale/OSINT-Framework/mas
 
 def fetch_osint_tree() -> dict:
     log.info("Fetching OSINT Framework tree from GitHub...")
-    resp = requests.get(OSINT_JSON_URL, timeout=15)
+    tree_file = os.environ.get("OSINT_TREE_FILE")
+    if tree_file:
+        with open(tree_file, encoding="utf-8") as source:
+            return json.load(source)
+    resp = requests.get(os.environ.get("OSINT_TREE_URL", OSINT_JSON_URL), timeout=15)
     resp.raise_for_status()
     return resp.json()
 
@@ -51,7 +55,8 @@ def flatten_tree(node: dict, path: str = "", tools: list = None) -> list:
     current_path = f"{path} > {node_name}" if path else node_name
 
     if node_type == "url" and node_url:
-        top_cat = path.split(" > ")[0] if " > " in path else node_name
+        categories = path.split(" > ")
+        top_cat = categories[1] if len(categories) > 1 else categories[0]
         tools.append(Tool(
             name=node_name, url=node_url,
             category_path=current_path, parent_category=top_cat
@@ -78,6 +83,7 @@ class InputType(Enum):
     URL_LINK = "url_link"
     HASH = "hash"
     BITCOIN_ADDR = "bitcoin_address"
+    ADDRESS = "address"
     UNKNOWN = "unknown"
 
 
@@ -134,6 +140,7 @@ CATEGORY_MAP = {
                          "Disinformation & Media Verification"],
     InputType.HASH: ["Encoding / Decoding", "Search Engines", "Blockchain & Cryptocurrency"],
     InputType.BITCOIN_ADDR: ["Blockchain & Cryptocurrency", "Search Engines"],
+    InputType.ADDRESS: ["Public Records", "People Search Engines", "Geolocation Tools / Maps"],
     InputType.UNKNOWN: [],
 }
 
@@ -157,8 +164,20 @@ def get_relevant_tools(all_tools: list, input_type: InputType) -> list:
 # ═══════════════════════════════════════════════════════
 def build_search_url(tool: Tool, query: str) -> str:
     url = tool.url.rstrip("/")
-    domain = urlparse(url).netloc
-    q = quote(query)
+    domain = (urlparse(url).hostname or "").lower()
+    q = quote(query, safe="")
+
+    # Catalog URLs can be search templates, including site-restricted dorks.
+    # Substitute their parameter values before generic domain routing.
+    parsed = urlparse(url)
+    parameters = parse_qsl(parsed.query, keep_blank_values=True)
+    template = re.compile(r"<(?:username|searchterm|email_address|domain\.com|user_id)>", re.I)
+    if any(template.search(value) for _, value in parameters):
+        parameters = [(key, template.sub(lambda _: query, value)) for key, value in parameters]
+        return urlunparse(parsed._replace(query=urlencode(parameters)))
+    if domain in {"google.com", "www.google.com", "bing.com", "www.bing.com", "duckduckgo.com", "yandex.com"} and any(key == "q" for key, _ in parameters):
+        parameters = [(key, f"{value} {query}" if key == "q" else value) for key, value in parameters]
+        return urlunparse(parsed._replace(query=urlencode(parameters)))
 
     patterns = {
         "namechk.com": f"https://namechk.com/en/search?q={q}",
@@ -213,7 +232,7 @@ def build_search_url(tool: Tool, query: str) -> str:
     }
 
     for pattern_domain, pattern_url in patterns.items():
-        if pattern_domain in domain:
+        if domain == pattern_domain or domain.endswith("." + pattern_domain):
             return pattern_url
 
     if "/search" in url or "/lookup" in url or "/find" in url:
@@ -235,6 +254,8 @@ class ToolResult:
     match_count: int = 0
     match_details: list = field(default_factory=list)
     error: Optional[str] = None
+    source_url: Optional[str] = None
+    final_url: Optional[str] = None
 
 
 async def analyze_page(page: Page, tool: Tool, query: str, input_type: InputType) -> ToolResult:
@@ -254,129 +275,43 @@ async def analyze_page(page: Page, tool: Tool, query: str, input_type: InputType
             )
 
         log.info(f"    ⏳ Waiting 2.5s for page to load...")
-        await page.wait_for_timeout(2500)
+        await page.wait_for_timeout(int(os.environ.get("OSINT_PAGE_WAIT_MS", "2500")))
 
-        match_count = 0
-        match_details = []
+        final_url = page.url
+        host = (urlparse(final_url).hostname or "").lower()
+        search_hosts = ("google.com", "bing.com", "duckduckgo.com", "yandex.com", "yahoo.com")
+        if any(host == engine or host.endswith("." + engine) for engine in search_hosts):
+            return ToolResult(
+                input_value=query, input_type=input_type.value,
+                tool_name=tool.name, category=tool.parent_category,
+                url_searched=search_url, status="manual_review",
+                match_details=["Search engine query only. Review individual result pages; query echoes are not evidence of an account or exposure."],
+                source_url=tool.url, final_url=final_url,
+            )
 
-        # ── CHECK 1: Body text scan ──
-        log.info(f"    🔍 CHECK 1: Scanning body text for '{query}'...")
-        try:
-            body_text = await page.evaluate("() => document.body.innerText")
-            text_occ = len(re.findall(re.escape(query), body_text, re.IGNORECASE))
-            if text_occ > 0:
-                match_count += text_occ
-                match_details.append(f"Text matches: {text_occ}")
-                log.info(f"       ✅ Found {text_occ} text matches in body")
-            else:
-                log.info(f"       ❌ No text matches in body")
-        except Exception as e:
-            log.info(f"       ⚠️  Error: {e}")
-
-        # ── CHECK 2: HTML source scan ──
-        log.info(f"    🔍 CHECK 2: Scanning HTML source for '{query}'...")
-        try:
-            html = await page.evaluate("() => document.documentElement.outerHTML")
-            html_occ = len(re.findall(re.escape(query), html, re.IGNORECASE))
-            if html_occ > 0:
-                match_count += html_occ
-                match_details.append(f"HTML matches: {html_occ}")
-                log.info(f"       ✅ Found {html_occ} HTML matches")
-            else:
-                log.info(f"       ❌ No HTML matches")
-        except Exception as e:
-            log.info(f"       ⚠️  Error: {e}")
-
-        # ── CHECK 3: Link scanning ──
-        log.info(f"    🔍 CHECK 3: Scanning all links on page...")
-        try:
-            links = await page.evaluate("""
-                () => Array.from(document.querySelectorAll('a')).map(a => ({
-                    href: a.href, text: a.innerText
-                }))
-            """)
-            q_clean = query.replace(" ", "").replace("-", "").replace(".", "").lower()
-            matching = [l for l in links
-                        if q_clean in l.get("href", "").replace(" ", "").replace("-", "").replace(".", "").lower()
-                        or q_clean in l.get("text", "").replace(" ", "").replace("-", "").replace(".", "").lower()]
-            if matching:
-                match_count += len(matching)
-                match_details.append(f"Matching links: {len(matching)}")
-                log.info(f"       ✅ Found {len(matching)} matching links")
-                for link in matching[:3]:
-                    log.info(f"          → {link.get('href', '')[:80]}")
-            else:
-                log.info(f"       ❌ No matching links")
-        except Exception as e:
-            log.info(f"       ⚠️  Error: {e}")
-
-        # ── CHECK 4: CSS selector scanning ──
-        log.info(f"    🔍 CHECK 4: Testing CSS selectors for result containers...")
-        selectors = [
-            ".result", ".results", ".search-result", ".search-results",
-            ".card", ".cards", ".profile", ".profiles",
-            ".item", ".items", ".entry", ".entries",
-            ".record", ".records", ".listing", ".listings",
-            ".match", ".matches", ".found",
-            "table tr", ".row", ".data-row",
-            ".info", ".info-card", ".detail",
-            "[class*='result']", "[class*='match']", "[class*='found']",
-            "[class*='profile']", "[class*='record']",
-        ]
-        
-        for sel in selectors:
-            try:
-                elements = await page.query_selector_all(sel)
-                if elements and len(elements) > 0:
-                    log.info(f"       📦 Selector '{sel}' found {len(elements)} elements, checking for matches...")
-                    has_match = False
-                    for el in elements[:20]:
-                        text = await el.inner_text()
-                        if query.lower() in text.lower():
-                            has_match = True
-                            break
-                    if has_match:
-                        match_count += len(elements)
-                        match_details.append(f"Selector '{sel}': {len(elements)} elements with match")
-                        log.info(f"          ✅ MATCH FOUND in {len(elements)} elements!")
-                        break
-                    else:
-                        log.info(f"          ❌ No query match in these elements")
-            except Exception:
-                pass
-
-        # ── CHECK 5: Meta tags and title ──
-        log.info(f"    🔍 CHECK 5: Checking page title and meta tags...")
-        try:
-            title = await page.title()
-            if query.lower() in title.lower():
-                match_count += 1
-                match_details.append(f"Match in title: {title}")
-                log.info(f"       ✅ Match in page title: {title}")
-            
-            meta_desc = await page.evaluate("""
-                () => document.querySelector('meta[name="description"]')?.content || ''
-            """)
-            if query.lower() in meta_desc.lower():
-                match_count += 1
-                match_details.append("Match in meta description")
-                log.info(f"       ✅ Match in meta description")
-        except Exception as e:
-            log.info(f"       ⚠️  Error: {e}")
-
-        # ── Final result ──
-        if match_count > 0:
-            log.info(f"    ✅ TOTAL: {match_count} matches found across all checks")
-        else:
-            log.info(f"    ❌ TOTAL: No matches found")
-
+        # Count visible content once. HTML, titles, form values and navigation
+        # often repeat the query and must not inflate occurrence counts.
+        body_text = await page.evaluate("""() => {
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            const text = [];
+            while (walker.nextNode()) {
+                const parent = walker.currentNode.parentElement;
+                if (!parent || parent.closest('script,style,noscript,template,form,input,textarea,nav,header,footer,[role="search"],[hidden]')) continue;
+                if (!parent.getClientRects().length || getComputedStyle(parent).visibility === 'hidden') continue;
+                text.push(walker.currentNode.textContent);
+            }
+            return text.join(' ');
+        }""")
+        match_count = len(re.findall(re.escape(query), body_text, re.IGNORECASE))
+        match_details = [f"Visible content occurrences: {match_count}"] if match_count else []
         status = "success" if match_count > 0 else "no_match"
 
         return ToolResult(
             input_value=query, input_type=input_type.value,
             tool_name=tool.name, category=tool.parent_category,
             url_searched=search_url, status=status,
-            match_count=match_count, match_details=match_details
+            match_count=match_count, match_details=match_details,
+            source_url=tool.url, final_url=final_url
         )
 
     except Exception as e:
@@ -490,7 +425,8 @@ async def run_parallel_osint_search(
     all_tools: list,
     headless: bool = True,
     max_concurrent: int = 3,
-    delay_between: float = 1.0
+    delay_between: float = 1.0,
+    max_tools_per_query: Optional[int] = None
 ) -> dict:
     """
     Run all queries in parallel. Each query gets its own set of relevant tools.
@@ -529,11 +465,14 @@ async def run_parallel_osint_search(
         tasks = []
         for query, input_type in queries:
             relevant = get_relevant_tools(all_tools, input_type)
-            tasks.append(search_one_query(query, input_type, relevant, browser, semaphore, delay_between))
+            if max_tools_per_query is not None:
+                relevant = relevant[:max_tools_per_query]
+            tasks.append(search_one_query(query, input_type, relevant, context, semaphore, delay_between))
 
-        all_results = await asyncio.gather(*tasks)
-
-        await browser.close()
+        try:
+            all_results = await asyncio.gather(*tasks)
+        finally:
+            await browser.close()
 
     # Flatten results
     flat_results = []
@@ -560,6 +499,7 @@ async def run_parallel_osint_search(
             "no_match": sum(1 for r in flat_results if r.status == "no_match"),
             "blocked": sum(1 for r in flat_results if r.status == "blocked"),
             "error": sum(1 for r in flat_results if r.status == "error"),
+            "manual_review": sum(1 for r in flat_results if r.status == "manual_review"),
         },
     }
 

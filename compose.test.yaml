@@ -1,0 +1,28 @@
+services:
+  backend:
+    environment:
+      OSINT_TREE_URL: http://fixtures:9000/tree.json
+      OSINT_MAX_TOOLS: 3
+      OSINT_PAGE_WAIT_MS: 0
+      OSINT_SCAN_TIMEOUT: 30
+    depends_on:
+      - fixtures
+  fixtures:
+    image: python:3.12-slim-bookworm
+    volumes:
+      - ./tests/integration:/tests:ro
+    command: ["python", "/tests/fixture_server.py"]
+  test:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    init: true
+    shm_size: 256mb
+    volumes:
+      - ./tests/integration:/tests:ro
+    environment:
+      PYTHONPATH: /app
+    command: ["python", "/tests/test_stack.py"]
+    depends_on:
+      frontend:
+        condition: service_started

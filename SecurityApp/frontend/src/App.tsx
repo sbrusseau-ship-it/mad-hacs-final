@@ -1,6 +1,5 @@
-import { type FormEvent, useState } from "react";
-
-type ScanField = "email" | "username" | "name" | "ssn" | "phone" | "address" | "ip";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import { getSearch, startSearch, type ScanField, type SearchJob, type SearchResult } from "./api";
 
 const scanFields: {
   id: ScanField;
@@ -68,6 +67,43 @@ function ShieldIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+function SearchResults({ result }: { result: SearchResult }) {
+  const summary = result.summary;
+  return (
+    <section aria-label="Search results" className="mt-6 border-t border-white/15 pt-5">
+      <h2 className="text-lg font-medium">Search results</h2>
+      <p className="mt-2 text-sm leading-6 text-white/70">
+        {summary.total_queries} identifiers · {summary.total_tools_searched} sources checked · {summary.tools_with_matches} sources with potential matches
+      </p>
+      <p className="mt-2 text-sm text-white/60">
+        {summary.results_by_status.blocked ?? 0} blocked · {summary.results_by_status.error ?? 0} errors · {summary.results_by_status.manual_review ?? 0} require manual review
+      </p>
+      {summary.tools_with_matches === 0 && (
+        <p className="mt-4 text-sm leading-6 text-white/70">No potential matches found in the sources checked. Blocked or failed sources could not be assessed.</p>
+      )}
+      <div className="mt-4 max-h-[480px] space-y-3 overflow-y-auto">
+        {result.results.map((tool, index) => (
+          <details key={index} className="rounded border border-white/15 bg-black/20 p-3">
+            <summary className="cursor-pointer text-sm leading-6">
+              {tool.tool_name} <span className={tool.match_count > 0 ? "text-[#4da3ff]" : "text-white/60"}>— {tool.status === "manual_review" ? "search query — manual review required" : tool.status.replace(/_/g, " ")}{tool.match_count > 0 ? ` (${tool.match_count} potential matches)` : ""}</span>
+            </summary>
+            <div className="mt-2 space-y-2 break-words text-sm leading-6 text-white/65">
+              <p>Identifier: {tool.input_value}</p>
+              <p>Category: {tool.category}</p>
+              {tool.final_url && <p>Page visited: {tool.final_url}</p>}
+              {/^https?:\/\//i.test(tool.url_searched) && (
+                <a className="block text-[#4da3ff] underline" href={tool.url_searched} target="_blank" rel="noreferrer">Review source ↗</a>
+              )}
+              {tool.match_details.map((detail, detailIndex) => <p key={detailIndex}>{detail}</p>)}
+              {tool.error && <p className="text-red-200">{tool.error}</p>}
+            </div>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [enabled, setEnabled] = useState<Record<ScanField, boolean>>({
     email: true,
@@ -90,44 +126,64 @@ export default function App() {
   const [showValidation, setShowValidation] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
+  const [scanError, setScanError] = useState("");
+  const [job, setJob] = useState<SearchJob | null>(null);
+  const [elapsed, setElapsed] = useState<number | null>(null);
+  const requestController = useRef<AbortController | null>(null);
+  useEffect(() => () => requestController.current?.abort(), []);
+
+  const clearResult = () => {
+    setScanMessage("");
+    setScanError("");
+    setJob(null);
+    setElapsed(null);
+  };
 
   const toggleField = (field: ScanField) => {
     setEnabled((current) => ({ ...current, [field]: !current[field] }));
-    setScanMessage("");
+    clearResult();
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isReady || isScanning) return;
     setShowValidation(true);
-    setScanMessage("");
+    clearResult();
     if (invalidFields.length > 0) return;
 
     setShowValidation(false);
     setIsScanning(true);
+    const controller = new AbortController();
+    requestController.current = controller;
+    const started = performance.now();
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-           identifiers: Object.fromEntries(
-            filledFields
-            .filter(({ id }) => id !== "ssn")
-            .map(({ id }) => [id, values[id].trim()]),
-          ),
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      if (typeof data?.message !== "string" || !data.message.trim()) {
-        throw new Error("Invalid demo response");
+      let current = await startSearch(Object.fromEntries(
+        filledFields.map(({ id }) => [id, values[id].trim()]),
+      ), controller.signal);
+      setJob(current);
+      while (current.status === "queued" || current.status === "running") {
+        setScanMessage(current.message || "Searching public sources. This may take several minutes.");
+        await new Promise<void>((resolve, reject) => {
+          const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
+          const timer = window.setTimeout(() => {
+            controller.signal.removeEventListener("abort", abort);
+            resolve();
+          }, 1000);
+          controller.signal.addEventListener("abort", abort, { once: true });
+        });
+        current = await getSearch(current.id, controller.signal);
+        setJob(current);
       }
-      setScanMessage(data.message);
-    } catch {
-      setScanMessage("The demo request failed. Check that Flask is running and try again.");
+      if (current.status === "failed") throw new Error(current.error || "The search failed. Try again.");
+      if (!current.result) throw new Error("The server completed the search without results.");
+      setScanMessage(current.message || "Search completed.");
+      setElapsed(Math.round(performance.now() - started));
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setScanMessage("");
+      setScanError(error instanceof Error ? error.message : "Unable to reach the search server. Try again.");
     } finally {
-      setIsScanning(false);
+      if (!controller.signal.aborted) setIsScanning(false);
     }
   };
 
@@ -154,11 +210,11 @@ export default function App() {
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-2 font-mono text-xs tracking-[0.1em] text-white/65 sm:flex">
               <span className="h-1.5 w-1.5 rounded-full bg-[#4da3ff] shadow-[0_0_8px_#4da3ff]" />
-              SYSTEM OPERATIONAL
+              PUBLIC SOURCE SEARCH
             </span>
-            <button className="rounded-md border border-white/20 bg-white/[0.05] px-3 py-2 font-mono text-xs tracking-[0.06em] text-white/75 transition hover:border-white/35 hover:text-white">
+            <a href="/docs" target="_blank" rel="noreferrer" className="rounded-md border border-white/20 bg-white/[0.05] px-3 py-2 font-mono text-xs tracking-[0.06em] text-white/75 transition hover:border-white/35 hover:text-white">
               DOCS
-            </button>
+            </a>
           </div>
         </div>
       </header>
@@ -177,22 +233,21 @@ export default function App() {
               <span>internet knows.</span>
             </h1>
             <p className="mt-7 max-w-lg border-none border-transparent bg-[#4c4c4c] text-base leading-7 text-white/[0.86] sm:text-lg sm:leading-8">
-              Search known breach records for exposed credentials. Get a clear signal, without the
-              noise.
+              Search public sources for your identifiers and review potential matches in one place.
             </p>
 
             <div className="mt-10 grid max-w-lg grid-cols-3 border-y border-white/[0.14] py-5">
               <div>
-                <div className="font-mono text-lg text-white">14.8B</div>
-                <div className="mt-1 text-sm text-white/55">Records indexed</div>
+                <div className="font-mono text-lg text-white">7</div>
+                <div className="mt-1 text-sm text-white/55">Identifier types</div>
               </div>
               <div className="border-l border-white/[0.14] pl-5 sm:pl-7">
-                <div className="font-mono text-lg text-white">972</div>
-                <div className="mt-1 text-sm text-white/55">Known breaches</div>
+                <div className="font-mono text-lg text-white">OSINT</div>
+                <div className="mt-1 text-sm text-white/55">Public sources</div>
               </div>
               <div className="border-l border-white/[0.14] pl-5 sm:pl-7">
-                <div className="font-mono text-lg text-[#4da3ff]">0</div>
-                <div className="mt-1 text-sm text-white/55">Data retained</div>
+                <div className="font-mono text-lg text-[#4da3ff]">Live</div>
+                <div className="mt-1 text-sm text-white/55">Source checks</div>
               </div>
             </div>
 
@@ -201,7 +256,7 @@ export default function App() {
                 <ShieldIcon size={17} />
               </span>
               <p className="text-sm leading-6 text-white/65">
-                Use sample data in this demo. Only the types of fields you fill in are sent to the demo backend.
+                Submitted identifiers are sent to public search services. Use only details you are authorized to search. Text matches need review and do not prove a data breach.
               </p>
             </div>
           </div>
@@ -273,7 +328,7 @@ export default function App() {
                               ...current,
                               [field.id]: event.target.value,
                             }));
-                            setScanMessage("");
+                            clearResult();
                           }}
                           placeholder={field.placeholder}
                           autoComplete={field.autoComplete ?? "off"}
@@ -305,7 +360,7 @@ export default function App() {
                   {isScanning ? (
                     <>
                       <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/25 border-t-black" />
-                      SENDING DEMO REQUEST
+                      SEARCHING PUBLIC SOURCES
                     </>
                   ) : (
                     <>
@@ -328,15 +383,18 @@ export default function App() {
                   </div>
                 )}
 
+                {scanError && <p role="alert" className="mt-5 rounded border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">{scanError}</p>}
+                {job?.status === "completed" && job.result && <SearchResults result={job.result} />}
+
                 <div className="mt-5 flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.08em] text-white/45">
                   <ShieldIcon size={12} />
-                  ENCRYPTED IN TRANSIT · NO SEARCH HISTORY
+                  PUBLIC SOURCE MATCHES REQUIRE REVIEW
                 </div>
               </form>
             </div>
             <div className="mt-3 flex justify-between px-1 font-mono text-[10px] tracking-[0.08em] text-white/40">
-              <span>REQUEST_ID: LOCAL_PREVIEW</span>
-              <span>LATENCY: --MS</span>
+              <span>REQUEST_ID: {job?.id ?? "--"}</span>
+              <span>DURATION: {elapsed === null ? "--" : (elapsed / 1000).toFixed(1)}S</span>
             </div>
           </div>
         </div>

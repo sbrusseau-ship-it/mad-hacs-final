@@ -1,0 +1,1 @@
+"""CatPhish OSINT application."""
